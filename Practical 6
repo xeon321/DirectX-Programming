@@ -1,0 +1,303 @@
+#define WIN32_LEAN_AND_MEAN
+
+#include <Windows.h>
+#include <d3d9.h>
+#include <iostream>
+#include <math.h>
+#include <d3dx9.h>
+#include <string>
+#include <string.h>
+using namespace std;
+
+void initializeDirect3DDevice();
+void draw();
+void beginDrawScene();
+void endDrawScene();
+void cleanDevice();
+
+// Window API Functions
+void createWindow();
+void destroyWindow();
+bool windowIsRunning();
+
+HWND g_hWnd = NULL; 
+HRESULT hr = NULL;
+
+// DirectX Devices
+D3DPRESENT_PARAMETERS d3dPP; //  Define how the screen presents.
+IDirect3DDevice9 * d3dDevice;
+IDirect3D9 * direct3D9;
+
+// Sprites
+LPD3DXSPRITE sprite = NULL;
+LPDIRECT3DTEXTURE9 textureArray[2];
+char* textureName[2] = { "P.png", "E.png"};
+RECT playerRect;
+RECT enemyRect;
+
+int prevEx = 250;
+int prevEy = 250;
+int prevPx = 100;
+int prevPy = 250;
+
+int eX = 250;
+int eY = 250;
+int pX = 100;
+int pY = 250;
+int speed = 5;
+
+int pTextureWidth   = 32;
+int pTextureHeight  = 32;
+
+int pDestRectLeft   = pX;
+int pDestRectRight  = pX + pTextureWidth;
+int pDestRectTop    = pY;
+int pDestRectBottom = pY + pTextureHeight;
+
+
+int eTextureWidth   = 32;
+int eTextureHeight  = 32;
+
+int eDestRectLeft   = eX;
+int eDestRectRight  = eX + eTextureWidth;
+int eDestRectTop    = eY;
+int eDestRectBottom = eY + eTextureHeight;
+
+bool collided();
+
+LRESULT CALLBACK WindowProcedure(HWND hWnd, 
+								UINT message, 
+								WPARAM wParam,
+								LPARAM lParam)
+{
+	switch(message)
+	{
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		break;
+
+	case WM_KEYDOWN:
+		switch(wParam)
+		{
+		case VK_ESCAPE:
+			PostQuitMessage(0);
+			break;
+			
+		case VK_RIGHT:
+			if (!collided())
+			{
+				pX += speed;
+			}
+			
+			break;
+		case VK_LEFT:
+			pX -= speed;
+			break;
+		}
+	default:
+		return DefWindowProc(hWnd, message, wParam, lParam);
+	}
+	return 0;
+}
+
+bool collided()
+{
+	if (pDestRectRight >= eDestRectLeft)
+	{
+		pX = prevPx;
+		
+		return true;
+	}
+	else if (pDestRectLeft >= eDestRectRight)
+	{
+		pX = prevPx;
+
+		return true;
+	}
+
+	return false;
+}
+
+void updateRect()
+{
+	pDestRectLeft   = pX;
+	pDestRectRight  = pX + pTextureWidth;
+	pDestRectTop    = pY;
+	pDestRectBottom = pY + pTextureHeight;
+
+	eDestRectLeft   = eX;
+	eDestRectRight  = eX + eTextureWidth;
+	eDestRectTop    = eY;
+	eDestRectBottom = eY + eTextureHeight;
+
+	prevPx = pX;
+	prevPy = pY;
+	prevEx = eX;
+	prevEy = eY;
+
+}
+
+int main()
+{
+	createWindow();
+	initializeDirect3DDevice();
+	D3DXCreateSprite(d3dDevice, &sprite);
+	
+	playerRect.left = 0;
+	playerRect.top = 0;
+	playerRect.right = 32;
+	playerRect.bottom = 32;
+
+	enemyRect.left = 0;
+	enemyRect.top = 0;
+	enemyRect.right = 32;
+	enemyRect.bottom = 32;
+
+	for (int i = 0 ; i < 2; i ++)
+	{
+		// Ex <- Extra, more advanced function compared to non-Ex version
+		hr = D3DXCreateTextureFromFileEx(d3dDevice,
+			textureName[i] , 32, 32, 
+			D3DX_DEFAULT,
+			NULL, 
+			D3DFMT_A8R8G8B8, 
+			D3DPOOL_MANAGED, 
+			D3DX_DEFAULT, 
+			D3DX_DEFAULT, 
+			D3DCOLOR_XRGB(255, 255, 255), 
+			NULL, 
+			NULL, 
+			&textureArray[i]);
+	}
+
+	while(windowIsRunning())
+	{
+		updateRect();
+
+		cout << "Player Top " << pDestRectTop << endl;
+		cout << "Player Bottom " << pDestRectBottom << endl;
+		cout << "Player Left " << pDestRectLeft << endl;
+		cout << "Player Right " << pDestRectRight << endl;
+
+		beginDrawScene();
+		
+		sprite->Begin(D3DXSPRITE_ALPHABLEND);
+
+		sprite->Draw(textureArray[0],
+			&playerRect,
+			NULL, 
+			&D3DXVECTOR3(pX, pY, 0), 
+			D3DCOLOR_XRGB(0, 0, 0));
+		
+		sprite->Draw(textureArray[1],
+			&enemyRect,
+			NULL, 
+			&D3DXVECTOR3(eX, eY, 0), 
+			D3DCOLOR_XRGB(0, 0, 0));
+
+		sprite->End();
+
+		endDrawScene();
+	}
+
+	for(int i = 0 ; i < 2; i++)
+	{
+		textureArray[i]->Release();
+		textureArray[i] = NULL;
+	}
+
+	cleanDevice();
+	destroyWindow();
+	return 0;
+}
+
+void createWindow()
+{
+	WNDCLASS wndClass;
+
+	ZeroMemory(&wndClass, sizeof(wndClass));
+
+	wndClass.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
+	wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
+	wndClass.hIcon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(102));
+	wndClass.hInstance = GetModuleHandle(NULL);
+	wndClass.lpfnWndProc = WindowProcedure;
+	wndClass.lpszClassName = "My Window";
+	wndClass.style = CS_HREDRAW | CS_VREDRAW;
+
+	RegisterClass(&wndClass);
+
+	g_hWnd = CreateWindowEx(0, 
+							wndClass.lpszClassName,
+							"My Window's Name (Not Responding)",
+							WS_OVERLAPPEDWINDOW,
+							0, 
+							100, 
+							400, 
+							300,
+							NULL,
+							NULL,
+							GetModuleHandle(NULL),
+							NULL);
+	ShowWindow(g_hWnd, 1);
+}
+bool windowIsRunning()
+{
+	MSG msg;
+	ZeroMemory(&msg, sizeof(msg));
+	
+	if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+	{
+		if (msg.message == WM_QUIT) return false;
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+
+	return true;
+}
+void destroyWindow()
+{
+	UnregisterClass("My Window", GetModuleHandle(NULL));
+}
+
+void initializeDirect3DDevice()
+{
+	direct3D9 = Direct3DCreate9(D3D_SDK_VERSION);
+	ZeroMemory(&d3dPP, sizeof(d3dPP));
+
+	d3dPP.Windowed = true;
+	d3dPP.SwapEffect = D3DSWAPEFFECT_DISCARD;
+	d3dPP.BackBufferFormat = D3DFMT_X8R8G8B8;
+	d3dPP.BackBufferCount = 1;
+	d3dPP.BackBufferWidth  = 400;
+	d3dPP.BackBufferHeight = 300;
+	d3dPP.hDeviceWindow = g_hWnd;
+	d3dPP.PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+
+	hr = direct3D9->CreateDevice(D3DADAPTER_DEFAULT, 
+								D3DDEVTYPE_HAL,
+								g_hWnd,	
+								D3DCREATE_SOFTWARE_VERTEXPROCESSING,
+								&d3dPP, 
+								&d3dDevice);
+}
+void beginDrawScene()
+{
+	d3dDevice->Clear(0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(255, 255, 255), 1.0f, 0);
+	d3dDevice->BeginScene();
+}
+void endDrawScene()
+{
+	d3dDevice->EndScene();
+	d3dDevice->Present(NULL, NULL, NULL, NULL);
+}
+void cleanDevice ()
+{
+	d3dDevice->Release();
+	d3dDevice = NULL;
+}
+void cleanSprites ()
+{
+	sprite->Release();
+	sprite = NULL;
+}
